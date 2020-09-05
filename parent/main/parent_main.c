@@ -68,6 +68,7 @@ void esp_mesh_p2p_tx_main(void *arg)
                      esp_mesh_get_routing_table_size(), send_count);
         }
         send_count++;
+        tx_buf[0] = 11;
         tx_buf[22] = 33;
 
         for (i = 0; i < route_table_size; i++) {
@@ -101,7 +102,6 @@ void esp_mesh_p2p_rx_main(void *arg)
     int recv_count = 0;
     esp_err_t err;
     mesh_addr_t from;
-    int send_count = 0;
     mesh_data_t data;
     int flag = 0;
     data.data = rx_buf;
@@ -198,7 +198,6 @@ void mesh_event_handler(void *arg, esp_event_base_t event_base,
                  esp_mesh_is_root() ? "<ROOT>" :
                  (mesh_layer == 2) ? "<layer2>" : "", MAC2STR(id.addr), connected->duty);
         last_layer = mesh_layer;
-        mesh_connected_indicator(mesh_layer);
         is_mesh_connected = true;
         if (esp_mesh_is_root()) {
             esp_netif_dhcpc_start(netif_sta);
@@ -212,7 +211,6 @@ void mesh_event_handler(void *arg, esp_event_base_t event_base,
                  "<MESH_EVENT_PARENT_DISCONNECTED>reason:%d",
                  disconnected->reason);
         is_mesh_connected = false;
-        mesh_disconnected_indicator();
         mesh_layer = esp_mesh_get_layer();
     }
     break;
@@ -224,7 +222,6 @@ void mesh_event_handler(void *arg, esp_event_base_t event_base,
                  esp_mesh_is_root() ? "<ROOT>" :
                  (mesh_layer == 2) ? "<layer2>" : "");
         last_layer = mesh_layer;
-        mesh_connected_indicator(mesh_layer);
     }
     break;
     case MESH_EVENT_ROOT_ADDRESS: {
