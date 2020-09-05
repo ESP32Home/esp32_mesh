@@ -116,7 +116,7 @@ void esp_mesh_p2p_rx_main(void *arg)
             continue;
         }
         recv_count++;
-        ESP_LOGW(MESH_TAG,"[#RX(%d):%u]",data.size,data.data[22]);
+        ESP_LOGW(MESH_TAG,"[#RX(%d):%u - %u]",data.size,data.data[0],data.data[22]);
     }
     vTaskDelete(NULL);
 }
@@ -361,8 +361,7 @@ void app_main(void)
     ESP_ERROR_CHECK(esp_mesh_set_vote_percentage(1));
     ESP_ERROR_CHECK(esp_mesh_set_xon_qsize(128));
 
-
-    /* Enable mesh PS function */
+    /*-------------- Enable mesh PS function : parent ----------------*/
     ESP_ERROR_CHECK(esp_mesh_enable_ps());
     /* better to increase the associate expired time, if a small duty cycle is set. */
     ESP_ERROR_CHECK(esp_mesh_set_ap_assoc_expire(60));

@@ -13,7 +13,6 @@
 #include "esp_log.h"
 #include "esp_mesh.h"
 #include "esp_mesh_internal.h"
-#include "mesh_light.h"
 #include "nvs_flash.h"
 
 /*******************************************************
@@ -39,20 +38,6 @@ static mesh_addr_t mesh_parent_addr;
 static int mesh_layer = -1;
 static esp_netif_t *netif_sta = NULL;
 
-mesh_light_ctl_t light_on = {
-    .cmd = MESH_CONTROL_CMD,
-    .on = 1,
-    .token_id = MESH_TOKEN_ID,
-    .token_value = MESH_TOKEN_VALUE,
-};
-
-mesh_light_ctl_t light_off = {
-    .cmd = MESH_CONTROL_CMD,
-    .on = 0,
-    .token_id = MESH_TOKEN_ID,
-    .token_value = MESH_TOKEN_VALUE,
-};
-
 /*******************************************************
  *                Function Declarations
  *******************************************************/
@@ -75,14 +60,6 @@ void esp_mesh_p2p_tx_main(void *arg)
     is_running = true;
 
     while (is_running) {
-        /* non-root do nothing but print */
-        if (!esp_mesh_is_root()) {
-            ESP_LOGI(MESH_TAG, "layer:%d, rtableSize:%d, %s", mesh_layer,
-                     esp_mesh_get_routing_table_size(),
-                     (is_mesh_connected && esp_mesh_is_root()) ? "ROOT" : is_mesh_connected ? "NODE" : "DISCONNECT");
-            vTaskDelay(10 * 1000 / portTICK_RATE_MS);
-            continue;
-        }
         esp_mesh_get_routing_table((mesh_addr_t *) &route_table,
                                    CONFIG_MESH_ROUTE_TABLE_SIZE * 6, &route_table_size);
         if (send_count && !(send_count % 100)) {
@@ -90,7 +67,8 @@ void esp_mesh_p2p_tx_main(void *arg)
                      esp_mesh_get_routing_table_size(), send_count);
         }
         send_count++;
-        tx_buf[22] = 33;
+        tx_buf[0] = 22;
+        tx_buf[22] = 44;
 
         for (i = 0; i < route_table_size; i++) {
             err = esp_mesh_send(&route_table[i], &data, MESH_DATA_P2P, NULL, 0);
@@ -123,7 +101,6 @@ void esp_mesh_p2p_rx_main(void *arg)
     int recv_count = 0;
     esp_err_t err;
     mesh_addr_t from;
-    int send_count = 0;
     mesh_data_t data;
     int flag = 0;
     data.data = rx_buf;
@@ -138,7 +115,7 @@ void esp_mesh_p2p_rx_main(void *arg)
             continue;
         }
         recv_count++;
-        ESP_LOGW(MESH_TAG,"[#RX(%d):%u]",data.size,data.data[22]);
+        ESP_LOGW(MESH_TAG,"[#RX(%d):%u - %u]",data.size,data.data[0],data.data[22]);
     }
     vTaskDelete(NULL);
 }
@@ -220,7 +197,6 @@ void mesh_event_handler(void *arg, esp_event_base_t event_base,
                  esp_mesh_is_root() ? "<ROOT>" :
                  (mesh_layer == 2) ? "<layer2>" : "", MAC2STR(id.addr), connected->duty);
         last_layer = mesh_layer;
-        mesh_connected_indicator(mesh_layer);
         is_mesh_connected = true;
         if (esp_mesh_is_root()) {
             esp_netif_dhcpc_start(netif_sta);
@@ -234,7 +210,6 @@ void mesh_event_handler(void *arg, esp_event_base_t event_base,
                  "<MESH_EVENT_PARENT_DISCONNECTED>reason:%d",
                  disconnected->reason);
         is_mesh_connected = false;
-        mesh_disconnected_indicator();
         mesh_layer = esp_mesh_get_layer();
     }
     break;
@@ -246,7 +221,6 @@ void mesh_event_handler(void *arg, esp_event_base_t event_base,
                  esp_mesh_is_root() ? "<ROOT>" :
                  (mesh_layer == 2) ? "<layer2>" : "");
         last_layer = mesh_layer;
-        mesh_connected_indicator(mesh_layer);
     }
     break;
     case MESH_EVENT_ROOT_ADDRESS: {
@@ -363,7 +337,6 @@ void ip_event_handler(void *arg, esp_event_base_t event_base,
 
 void app_main(void)
 {
-    ESP_ERROR_CHECK(mesh_light_init());
     ESP_ERROR_CHECK(nvs_flash_init());
     /*  tcpip initialization */
     ESP_ERROR_CHECK(esp_netif_init());
@@ -386,18 +359,13 @@ void app_main(void)
     ESP_ERROR_CHECK(esp_mesh_set_max_layer(CONFIG_MESH_MAX_LAYER));
     ESP_ERROR_CHECK(esp_mesh_set_vote_percentage(1));
     ESP_ERROR_CHECK(esp_mesh_set_xon_qsize(128));
-#ifdef CONFIG_MESH_ENABLE_PS
-    /* Enable mesh PS function */
+
+    /*-------------- Enable mesh PS function : leaf ----------------*/
     ESP_ERROR_CHECK(esp_mesh_enable_ps());
     /* better to increase the associate expired time, if a small duty cycle is set. */
     ESP_ERROR_CHECK(esp_mesh_set_ap_assoc_expire(60));
     /* better to increase the announce interval to avoid too much management traffic, if a small duty cycle is set. */
     ESP_ERROR_CHECK(esp_mesh_set_announce_interval(600, 3300));
-#else
-    /* Disable mesh PS function */
-    ESP_ERROR_CHECK(esp_mesh_disable_ps());
-    ESP_ERROR_CHECK(esp_mesh_set_ap_assoc_expire(10));
-#endif
     mesh_cfg_t cfg = MESH_INIT_CONFIG_DEFAULT();
     /* mesh ID */
     memcpy((uint8_t *) &cfg.mesh_id, MESH_ID, 6);
@@ -415,12 +383,14 @@ void app_main(void)
     ESP_ERROR_CHECK(esp_mesh_set_config(&cfg));
     /* mesh start */
     ESP_ERROR_CHECK(esp_mesh_start());
-#ifdef CONFIG_MESH_ENABLE_PS
+
+
     /* set the device active duty cycle. (default:12, MESH_PS_DEVICE_DUTY_REQUEST) */
     ESP_ERROR_CHECK(esp_mesh_set_active_duty_cycle(CONFIG_MESH_PS_DEV_DUTY, CONFIG_MESH_PS_DEV_DUTY_TYPE));
     /* set the network active duty cycle. (default:12, -1, MESH_PS_NETWORK_DUTY_APPLIED_ENTIRE) */
     ESP_ERROR_CHECK(esp_mesh_set_network_duty_cycle(CONFIG_MESH_PS_NWK_DUTY, CONFIG_MESH_PS_NWK_DUTY_DURATION, CONFIG_MESH_PS_NWK_DUTY_RULE));
-#endif
+
+
     ESP_LOGI(MESH_TAG, "mesh starts successfully, heap:%d, %s<%d>%s, ps:%d\n",  esp_get_minimum_free_heap_size(),
              esp_mesh_is_root_fixed() ? "root fixed" : "root not fixed",
              esp_mesh_get_topology(), esp_mesh_get_topology() ? "(chain)":"(tree)", esp_mesh_is_ps_enabled());
