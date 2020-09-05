@@ -1,7 +1,7 @@
 #include "config_utils.h"
 #include <FS.h>
 #include <SPIFFS.h>
-
+    
 #define FORMAT_SPIFFS_IF_FAILED true
 static bool ready = false;
 
