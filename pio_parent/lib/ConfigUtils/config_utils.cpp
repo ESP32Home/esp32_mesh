@@ -14,7 +14,7 @@ bool spiffs_init(){
     return true;
 }
 
-bool load_json(DynamicJsonDocument &config,const char* FileName){
+bool load_json(DynamicJsonDocument &config,const char* FileName,bool verbose){
     if(!ready){
         if(!spiffs_init()){
             return false;
@@ -28,6 +28,12 @@ bool load_json(DynamicJsonDocument &config,const char* FileName){
         file.close();
         return false;
     }else{
+        if(verbose){
+            Serial.println();
+            Serial.println("Loaded json :");
+            serializeJsonPretty(config, Serial);
+            Serial.println();
+        }
         file.close();
         return true;
     }
